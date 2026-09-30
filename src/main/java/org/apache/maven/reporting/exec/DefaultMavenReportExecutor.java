@@ -30,14 +30,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import org.apache.maven.api.Project;
+import org.apache.maven.api.Session;
+import org.apache.maven.api.plugin.MojoException;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.internal.impl.DefaultProject;
+import org.apache.maven.internal.impl.InternalMavenSession;
 import org.apache.maven.lifecycle.LifecycleExecutor;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.MavenPluginManager;
 import org.apache.maven.plugin.Mojo;
 import org.apache.maven.plugin.MojoExecution;
-import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoNotFoundException;
 import org.apache.maven.plugin.PluginConfigurationException;
 import org.apache.maven.plugin.PluginContainerException;
@@ -155,7 +159,7 @@ public class DefaultMavenReportExecutor implements MavenReportExecutor {
 
     @Override
     public List<MavenReportExecution> buildMavenReports(MavenReportExecutorRequest mavenReportExecutorRequest)
-            throws MojoExecutionException {
+            throws MojoException {
         if (mavenReportExecutorRequest.getReportPlugins() == null) {
             return Collections.emptyList();
         }
@@ -175,7 +179,7 @@ public class DefaultMavenReportExecutor implements MavenReportExecutor {
                 reportExecutions.addAll(buildReportPlugin(mavenReportExecutorRequest, reportPlugin));
             }
         } catch (Exception e) {
-            throw new MojoExecutionException("Failed to get report for " + pluginKey, e);
+            throw new MojoException("Failed to get report for " + pluginKey, e);
         }
 
         return reportExecutions;
@@ -344,7 +348,7 @@ public class DefaultMavenReportExecutor implements MavenReportExecutor {
 
         MavenReportExecution mavenReportExecution = new MavenReportExecution(
                 report.getGoal(),
-                mojoExecution.getPlugin(),
+                mojoExecution.getPlugin().getDelegate(),
                 mavenReport,
                 pluginDescriptor.getClassRealm(),
                 userDefined);
@@ -375,6 +379,27 @@ public class DefaultMavenReportExecutor implements MavenReportExecutor {
         }
 
         return mavenReportExecution;
+    }
+
+    /**
+     * GAP: the Maven 4 API has no way to get from {@link Session} to the core session needed by
+     * {@link MavenPluginManager} and {@link LifecycleExecutor}, so this relies on maven-core's internal bridge.
+     */
+    private static MavenSession coreSession(MavenReportExecutorRequest request) {
+        return InternalMavenSession.from(request.getSession()).getMavenSession();
+    }
+
+    /**
+     * GAP: the Maven 4 API {@link Project} has no execution root flag ({@link Project#isRootProject()} means the
+     * directory holding <code>.mvn</code>) nor a way to build a {@link MojoExecution}, so the core project is needed.
+     */
+    private static MavenProject coreProject(MavenReportExecutorRequest request) {
+        Project project = request.getProject();
+        if (project instanceof DefaultProject) {
+            return ((DefaultProject) project).getProject();
+        }
+        throw new MojoException(
+                "Unsupported project implementation " + project.getClass().getName());
     }
 
     private boolean canAggregate(MavenProject project) {
@@ -652,20 +677,6 @@ public class DefaultMavenReportExecutor implements MavenReportExecutor {
                 buildPlugin.getDependencies().addAll(configuredPlugin.getDependencies());
             }
         }
-    }
-
-    /**
-     * Single access point for the Maven core session carried by the request.
-     */
-    private static MavenSession coreSession(MavenReportExecutorRequest request) {
-        return request.getMavenSession();
-    }
-
-    /**
-     * Single access point for the Maven core project carried by the request.
-     */
-    private static MavenProject coreProject(MavenReportExecutorRequest request) {
-        return request.getProject();
     }
 
     private static class GoalWithConf {
