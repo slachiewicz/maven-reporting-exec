@@ -35,7 +35,7 @@ Notice on now obsolete reportPlugin format
 
 Since 1.4 (used by Maven Site Plugin 3.7), the request can (and should) be populated from [pom's `<reporting.plugins>` section](/ref/current/maven-model/maven.html#class_reporting), injected in Mojo parameter as `${esc.d}{project.reporting.plugins}` default value:
 
-```unknown
+```java
     @Parameter( defaultValue = "${esc.d}{project.reporting.plugins}", readonly = true )
     private org.apache.maven.model.ReportPlugin[] reportingPlugins;
 ```
@@ -44,7 +44,7 @@ This section is kept to explain what happened in previous releases of the compon
 
 Report plugins can be configured in `<configuration>` element of `maven-site-plugin` or any other report building plugin with following XML model corresponding to plugin's `List<`[`ReportPlugin`](./apidocs/org/apache/maven/reporting/exec/ReportPlugin.html)`>` parameter:
 
-```unknown
+```xml
 <reportPlugins>
   <reportPlugin>
     <groupId/>
